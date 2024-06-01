@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const axios = require('axios');
-const { v4: uuidv4 } = require('uuid');
+const producer = require('../kafka/producer');
 
 router.get('/info', async (req, res) => {
     const {name, artist} = req.query;
@@ -15,7 +15,7 @@ router.get('/info', async (req, res) => {
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Song not found' });
         }
-        res.json({ ...result.rows[0], id: uuidv4() });
+        res.json({ ...result.rows[0]});
     } catch (err) {
         res.status(500).json({ error: 'Database error', details: err.message });
     }
@@ -29,15 +29,15 @@ router.get('/lyrics', async (req, res) => {
 
     try {
         const response = await axios.get(`http://songs-api:3000/lyrics?songName=${songName}`);
-        res.json({ lyrics: response.data, id: uuidv4() });
+        res.json({ lyrics: response.data });
     } catch (err) {
         res.status(500).json({ error: 'Lyrics API error' });
     }
 });
 
 router.post('/add', async (req, res) => {
-    const {index, name, artist, release_date, length, popularity, danceability} = req.body;
-    if (!index || !name || !artist || !release_date || !length || !popularity || !danceability) {
+    const {name, artist, release_date, length, popularity, danceability} = req.body;
+    if (!name || !artist || !release_date || !length || !popularity || !danceability) {
         return res.status(404).json({ error: 'All song fields are required' });
     }
     try {
@@ -46,9 +46,14 @@ router.post('/add', async (req, res) => {
             return res.status(400).json({error: 'Song already exists'});
         }
 
-        const result = await pool.query(`INSERT INTO songs ("index", "name", "artist", "release_date", "length", "popularity", "danceability")  
-        VALUES ($1, $2, $3, $4, $5, $6, $7)`, [index, name, artist, release_date, length, popularity, danceability]);
-        res.json({ insert: result.rowCount , id: uuidv4() });
+        const payload = [
+            { topic: 'songs-topic', messages: JSON.stringify(req.body)}]
+        producer.send(payload, (err, data) => {
+            if (err) console.error(err);
+            else console.log(data);
+        });
+
+        res.json({ message: 'Song will be added!'});
 
     } catch (err) {
         res.status(500).json({ error: 'Database error', details: err.message });
