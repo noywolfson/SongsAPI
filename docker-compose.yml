@@ -94,6 +94,34 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  create-topic:
+    build:
+      context: ./kafka
+    command: [ "node", "createTopic.js" ]
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BROKER: kafka:9092
+      TOPIC_NAME: songs-topic
+    networks:
+      - songs_network
+  consumer:
+    build:
+      context: ./kafka
+    depends_on:
+      - kafka
+      - postgres
+      - create-topic
+    environment:
+      KAFKA_BROKER: kafka:9092
+      TOPIC_NAME: songs-topic
+      GROUP_ID: song-consumer-group
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASSWORD: Aa123456!
+      DB_NAME: songs_db
+    networks:
+      - songs_network
   songs-api:
     image: node:20-alpine  # Use the official Node.js alpine image
     working_dir: /app  # Set the working directory inside the container
